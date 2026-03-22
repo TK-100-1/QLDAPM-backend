@@ -4,7 +4,7 @@ function isValidPassword(password) {
   let hasLetter = false;
   let hasDigit = false;
   let hasSpecial = false;
-  const specialChars = '.,/^@$!%*?&';
+  const specialChars = ".,/^@$!%*?&";
 
   for (const char of password) {
     if (/[a-zA-Z]/.test(char)) hasLetter = true;
@@ -27,6 +27,11 @@ function isValidUsername(username) {
   return /^[a-zA-Z0-9-]{3,20}$/.test(username);
 }
 
+function isValidEmail(email) {
+  const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return regex.test(email);
+}
+
 function isValidPhoneNumber(phoneNumber) {
   const regex = /^(?:\+84)(?:3[2-9]|5[689]|7[06-9]|8[1-5]|9[0-9])[0-9]{7}$/;
   return regex.test(phoneNumber);
@@ -37,5 +42,6 @@ export {
   isValidName,
   isAlphabetical,
   isValidUsername,
+  isValidEmail,
   isValidPhoneNumber,
 };

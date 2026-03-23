@@ -9,6 +9,7 @@ import {
     isValidUsername,
     isValidPassword,
     isValidPhoneNumber,
+    isValidEmail,
 } from '../utils/validation.js';
 import { generateOTP, hashString } from '../utils/tokenUtils.js';
 import { sendEmail } from '../utils/emailUtils.js';
@@ -29,56 +30,54 @@ async function register(req, res) {
     try {
         const { username, email, password, profile } = req.body;
 
-        const errors = {};
-
         if (!username || !email || !password) {
-            return res
-                .status(400)
-                .json({
-                    message: 'Invalid input',
-                    errors: { form: 'Missing required fields' },
-                });
+            return res.status(400).json({ error: 'Invalid input' });
+        }
+
+        if (!isValidEmail(email)) {
+            return res.status(400).json({ error: 'Invalid email format' });
         }
 
         if (!isValidUsername(username)) {
-            errors.username =
-                'Username only alphanumeric characters and hyphens are allowed.';
+            return res.status(400).json({
+                error: 'Username only alphanumeric characters and hyphens are allowed.',
+            });
         }
 
         if (!isValidPassword(password)) {
-            errors.password =
-                'Password must contain at least 8 characters, including letters, numbers, and special characters.';
+            return res.status(400).json({
+                error: 'Password must contain at least 8 characters, including letters, numbers, and special characters.',
+            });
         }
 
         if (profile && profile.phone_number && profile.phone_number !== '') {
             if (!isValidPhoneNumber(profile.phone_number)) {
-                errors.phone_number = 'Invalid phone number.';
+                return res.status(400).json({ error: 'Invalid phone number.' });
             }
         }
 
-        // Early return if validation errors
-        if (Object.keys(errors).length > 0) {
-            return res
-                .status(400)
-                .json({ message: 'Validation error', errors });
+        // Check if username already exists
+        const userByName = await User.findOne({ username });
+        if (userByName) {
+            return res.status(409).json({ error: 'Username already exists' });
         }
 
-        // Check if username, email or phone already exists (check separately to provide field-level errors)
-        const existingUsername = await User.findOne({ username });
-        const existingEmail = await User.findOne({ email });
-        let existingPhone = null;
+        // Check if email already exists
+        const userByEmail = await User.findOne({ email });
+        if (userByEmail) {
+            return res.status(409).json({ error: 'Email already exists' });
+        }
+
+        // Check if phone already exists
         if (profile && profile.phone_number && profile.phone_number !== '') {
-            existingPhone = await User.findOne({
+            const userByPhone = await User.findOne({
                 'profile.phone_number': profile.phone_number,
             });
-        }
-
-        if (existingUsername || existingEmail || existingPhone) {
-            if (existingUsername) errors.username = 'Username already exists.';
-            if (existingEmail) errors.email = 'Email already exists.';
-            if (existingPhone)
-                errors.phone_number = 'Phone number already exists.';
-            return res.status(409).json({ message: 'Conflict', errors });
+            if (userByPhone) {
+                return res
+                    .status(409)
+                    .json({ error: 'Phone number already exists' });
+            }
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -104,12 +103,7 @@ async function login(req, res) {
         const { username, password } = req.body;
 
         if (!username || !password) {
-            return res
-                .status(400)
-                .json({
-                    message: 'Invalid input',
-                    errors: { form: 'Missing required fields' },
-                });
+            return res.status(400).json({ error: 'Invalid input' });
         }
 
         const user = await User.findOne({
@@ -119,10 +113,7 @@ async function login(req, res) {
         if (!user) {
             return res
                 .status(401)
-                .json({
-                    message: 'Invalid credentials',
-                    errors: { identifier: 'Username or email not found' },
-                });
+                .json({ error: 'Username or password is incorrect' });
         }
 
         if (!user.is_active) {
@@ -135,10 +126,7 @@ async function login(req, res) {
         if (!isMatch) {
             return res
                 .status(401)
-                .json({
-                    message: 'Invalid credentials',
-                    errors: { password: 'Password is incorrect' },
-                });
+                .json({ error: 'Username or password is incorrect' });
         }
 
         const token = generateToken(user._id.toString(), user.role);

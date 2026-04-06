@@ -19,8 +19,12 @@ function setupPriceRoutes(app) {
   router.get('/v1/future-price', getFuturePrice);
 
   // VIP-1+ kline
-  // router.get('/v1/vip1/kline', authMiddleware('VIP-1', 'VIP-2', 'VIP-3'), getKline);
-  router.get('/v1/vip1/kline', getKline);
+  router.get(
+    '/v1/vip1/kline',
+    authMiddleware('VIP-1', 'VIP-2', 'VIP-3'),
+    getKline
+  );
+  // router.get('/v1/vip1/kline', getKline);
 
   app.use('/api', router);
 }

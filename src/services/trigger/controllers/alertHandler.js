@@ -199,4 +199,65 @@ async function deleteAlert(req, res) {
     }
 }
 
-export { createAlert, getAlerts, getAlert, deleteAlert };
+async function updateAlert(req, res) {
+    try {
+        const tokenString = req.headers.authorization;
+        if (!tokenString) {
+            return res
+                .status(401)
+                .json({ error: 'Authorization header required' });
+        }
+
+        let claims;
+        try {
+            claims = verifyJWT(tokenString);
+        } catch (e) {
+            return res.status(401).json({ error: 'Invalid token' });
+        }
+
+        const currentUserID = claims.userID;
+        if (!currentUserID) {
+            return res
+                .status(401)
+                .json({ error: 'User ID not found in token' });
+        }
+
+        const id = req.params.id;
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ error: 'Invalid alert ID' });
+        }
+
+        // Verify alert belongs to user
+        const alert = await Alert.findOne({ _id: id, user_id: currentUserID });
+        if (!alert) {
+            return res.status(404).json({ error: 'Alert not found' });
+        }
+
+        // Update alert with new data
+        const updateData = {
+            ...req.body,
+            updated_at: new Date(),
+        };
+
+        const updatedAlert = await Alert.findByIdAndUpdate(id, updateData, {
+            new: true,
+            runValidators: true,
+        });
+
+        if (!updatedAlert) {
+            return res
+                .status(404)
+                .json({ error: 'Alert not found after update' });
+        }
+
+        res.status(200).json({
+            message: 'Alert updated successfully',
+            alert: updatedAlert,
+        });
+    } catch (err) {
+        console.error('UpdateAlert error:', err);
+        res.status(500).json({ error: 'Failed to update alert' });
+    }
+}
+
+export { createAlert, getAlerts, getAlert, updateAlert, deleteAlert };

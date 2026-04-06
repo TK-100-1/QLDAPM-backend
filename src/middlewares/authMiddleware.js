@@ -72,14 +72,15 @@ function authMiddleware(...allowedRoles) {
             const decoded = jwt.verify(tokenString, process.env.JWT_SECRET);
 
             const userRole = decoded.role;
+            console.log('Decoded token:', decoded);
 
             const hasAccess = allowedRoles.includes(userRole);
 
-            // if (!hasAccess) {
-            //   return res
-            //     .status(403)
-            //     .json({ error: "Access forbidden: insufficient role" });
-            // }
+            if (!hasAccess) {
+                return res
+                    .status(403)
+                    .json({ error: 'Access forbidden: insufficient role' });
+            }
 
             req.user = { user_id: decoded.user_id, role: decoded.role };
             next();

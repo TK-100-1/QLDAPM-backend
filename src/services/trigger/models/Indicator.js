@@ -6,7 +6,7 @@ const indicatorSchema = new mongoose.Schema(
         symbol: { type: String, required: true },
         indicator: {
             type: String,
-            enum: ['EMA', 'BollingerBands', 'MA', 'Custom'],
+            enum: ['EMA', 'BollingerBands','BOLL', 'MA', 'Custom'],
             required: true,
         },
         period: { type: Number, required: true },

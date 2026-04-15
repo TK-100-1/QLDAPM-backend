@@ -13,7 +13,9 @@ async function getKline(req, res) {
         return showError(400, 'Missing data', res);
     }
 
-    const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}`;
+    const baseUrl =
+        process.env.BINANCE_FAPI_BASE_URL || 'https://fapi.binance.com';
+    const url = `${baseUrl}/fapi/v1/klines?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}`;
 
     https
         .get(url, (resp) => {
@@ -23,7 +25,24 @@ async function getKline(req, res) {
             });
             resp.on('end', () => {
                 if (resp.statusCode !== 200) {
-                    return showError(500, 'Internal server error', res);
+                    console.error('Binance kline upstream error:', {
+                        statusCode: resp.statusCode,
+                        body: data.slice(0, 500),
+                    });
+
+                    if (resp.statusCode === 451) {
+                        return showError(
+                            502,
+                            'Binance is unavailable from this deployment region',
+                            res,
+                        );
+                    }
+
+                    return showError(
+                        502,
+                        `Upstream API returned status ${resp.statusCode}`,
+                        res,
+                    );
                 }
 
                 try {
@@ -45,12 +64,13 @@ async function getKline(req, res) {
                         kline_data: klineData,
                     });
                 } catch (e) {
-                    showError(500, 'Internal server error', res);
+                    showError(502, 'Failed to decode upstream response', res);
                 }
             });
         })
-        .on('error', () => {
-            showError(500, 'Internal server error', res);
+        .on('error', (err) => {
+            console.error('Binance kline request failed:', err.message);
+            showError(502, 'Failed to fetch kline data', res);
         });
 }
 

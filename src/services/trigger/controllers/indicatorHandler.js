@@ -57,7 +57,11 @@ async function setAdvancedIndicatorAlert(req, res) {
             });
         }
 
-        if (!['EMA', 'BollingerBands', 'MA', 'Custom'].includes(indicator)) {
+        if (
+            !['EMA', 'BollingerBands', 'BOLL', 'MA', 'Custom'].includes(
+                indicator,
+            )
+        ) {
             return res.status(400).json({ error: 'Invalid indicator type' });
         }
 
@@ -227,7 +231,7 @@ async function updateIndicatorAlert(req, res) {
 
         if (
             indicatorType &&
-            !['EMA', 'BollingerBands', 'MA', 'Custom'].includes(indicatorType)
+            !['EMA', 'BollingerBands','BOLL', 'MA', 'Custom'].includes(indicatorType)
         ) {
             return res.status(400).json({ error: 'Invalid indicator type' });
         }

@@ -25,8 +25,17 @@ function authMiddleware(...allowedRoles) {
       const decoded = jwt.verify(tokenString, process.env.JWT_SECRET);
 
       const userRole = decoded.role;
-      // Temporarily allow all roles for alert features as requested
-      const hasAccess = true;
+
+      let hasAccess = false;
+      if (allowedRoles.length === 0) {
+        hasAccess = true;
+      } else if (allowedRoles.includes(userRole)) {
+        hasAccess = true;
+      }
+      // If user is Admin they bypass all checks
+      if (userRole === "Admin") {
+        hasAccess = true;
+      }
 
       if (!hasAccess) {
         return res

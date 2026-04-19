@@ -31,6 +31,11 @@ const alertSchema = new mongoose.Schema(
             enum: ['email', 'telegram', 'push'],
             required: true,
         },
+        notification_option: {
+            type: String,
+            enum: ['none', 'snooze', 'indicator'],
+            default: 'none',
+        },
         type: { type: String },
         frequency: { type: String },
         snooze_condition: { type: String },
@@ -47,6 +52,18 @@ const alertSchema = new mongoose.Schema(
         min_range: { type: Number, default: 0 },
         max_range: { type: Number, default: 0 },
         fundingRate: { type: String, default: '' },
+        indicator: {
+            type: String,
+            enum: ['', 'EMA', 'BOLL', 'MA'],
+            default: '',
+        },
+        indicator_period: { type: Number, default: 0 },
+        indicator_condition: {
+            type: String,
+            enum: ['', '=', '>', '<', '>=', '<='],
+            default: '',
+        },
+        indicator_threshold: { type: Number, default: 0 },
     },
     {
         timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },

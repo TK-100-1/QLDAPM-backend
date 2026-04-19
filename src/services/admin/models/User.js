@@ -20,6 +20,7 @@ const userSchema = new mongoose.Schema(
         is_active: { type: Boolean, default: true },
         profile: { type: profileSchema, default: () => ({}) },
         alerts: { type: [String], default: [] },
+        indicators: { type: [String], default: [] },
         reset_password_otp: { type: String },
         reset_password_expires: { type: Date },
     },

@@ -17,7 +17,12 @@ import { init as initMomo } from './services/admin/momo/momoPayment.js';
 import { setupAdminRoutes } from './services/admin/routes/routes.js';
 import { setupPriceRoutes, wsRoutes } from './services/price/routes/routes.js';
 import { setupTriggerRoutes } from './services/trigger/routes/routes.js';
+import {
+    startRunning as startAlertChecker,
+    stopRunning,
+} from './services/trigger/services/alertChecker.js';
 import { authMiddleware } from './middlewares/authMiddleware.js';
+import { checkAndSendAlerts } from './services/trigger/services/snooze.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -109,6 +114,12 @@ async function main() {
 
         // Initialize MoMo payment
         initMomo();
+
+        // Start alert checker automatically on server startup
+        // startAlertChecker();
+        // stopRunning();
+
+        await checkAndSendAlerts();
 
         // Start server
         const PORT = 8080;

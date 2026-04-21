@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import Indicator from '../models/Indicator.js';
 import User from '../../admin/models/User.js';
 import { verifyJWT } from '../../../middlewares/authMiddleware.js';
+import { normalizeBinanceSymbol } from './symbolAlert.js';
 
 async function setAdvancedIndicatorAlert(req, res) {
     try {
@@ -73,7 +74,7 @@ async function setAdvancedIndicatorAlert(req, res) {
 
         const newIndicator = new Indicator({
             user_id: currentUserID,
-            symbol,
+            symbol: normalizeBinanceSymbol(symbol),
             indicator,
             period,
             notification_method,
@@ -231,7 +232,9 @@ async function updateIndicatorAlert(req, res) {
 
         if (
             indicatorType &&
-            !['EMA', 'BollingerBands','BOLL', 'MA', 'Custom'].includes(indicatorType)
+            !['EMA', 'BollingerBands', 'BOLL', 'MA', 'Custom'].includes(
+                indicatorType,
+            )
         ) {
             return res.status(400).json({ error: 'Invalid indicator type' });
         }
@@ -239,7 +242,7 @@ async function updateIndicatorAlert(req, res) {
         const updatedIndicator = await Indicator.findByIdAndUpdate(
             id,
             {
-                ...(symbol && { symbol }),
+                ...(symbol && { symbol: normalizeBinanceSymbol(symbol) }),
                 ...(indicatorType && { indicator: indicatorType }),
                 ...(period && { period }),
                 ...(notification_method && { notification_method }),

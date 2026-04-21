@@ -116,10 +116,10 @@ async function main() {
         initMomo();
 
         // Start alert checker automatically on server startup
-        // startAlertChecker();
+        startAlertChecker();
         // stopRunning();
 
-        await checkAndSendAlerts();
+        // await checkAndSendAlerts();
 
         // Start server
         const PORT = 8080;

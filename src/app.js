@@ -13,12 +13,11 @@ import {
     disconnectDatabase,
 } from './config/database.js';
 import { startCleanupRoutine } from './services/admin/utils/cleanupUtils.js';
-import { init as initMomo } from './services/admin/momo/momoPayment.js';
 import { setupAdminRoutes } from './services/admin/routes/routes.js';
 import { setupPriceRoutes, wsRoutes } from './services/price/routes/routes.js';
 import { setupTriggerRoutes } from './services/trigger/routes/routes.js';
 import { authMiddleware } from './middlewares/authMiddleware.js';
-
+import Role from './services/admin/models/Role.js';
 const app = express();
 const server = http.createServer(app);
 
@@ -48,7 +47,7 @@ app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 // WebSocket server
 const wss = new WebSocketServer({ noServer: true });
 
-server.on('upgrade', (request, socket, head) => {
+server.on('upgrade', async (request, socket, head) => {
     const pathname = url.parse(request.url).pathname;
     const query = url.parse(request.url, true).query;
 
@@ -63,7 +62,19 @@ server.on('upgrade', (request, socket, head) => {
 
         try {
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
-            if (!['VIP-1', 'VIP-2', 'VIP-3'].includes(decoded.role)) {
+            const userRoleName = decoded.role;
+            let hasAccess = false;
+            
+            if (userRoleName === "Admin") {
+                hasAccess = true;
+            } else {
+                const role = await Role.findOne({ name: userRoleName }).lean();
+                if (role && role.permissions && role.permissions.includes('view_vip_kline')) {
+                    hasAccess = true;
+                }
+            }
+
+            if (!hasAccess) {
                 socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
                 socket.destroy();
                 return;
@@ -106,9 +117,6 @@ async function main() {
         startCleanupRoutine(10 * 60 * 1000);
 
         setupAdminRoutes(app);
-
-        // Initialize MoMo payment
-        initMomo();
 
         // Start server
         const PORT = 8080;

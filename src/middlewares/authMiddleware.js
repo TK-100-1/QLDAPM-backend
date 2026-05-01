@@ -1,10 +1,11 @@
 import jwt from "jsonwebtoken";
+import Role from "../services/admin/models/Role.js";
 
 // Token blacklist: Map<tokenString, expiresAt Date>
 const blacklistedTokens = new Map();
 
-function authMiddleware(...allowedRoles) {
-  return (req, res, next) => {
+function authMiddleware(...allowedPermissions) {
+  return async (req, res, next) => {
     const tokenString = req.headers.authorization;
 
     if (!tokenString) {
@@ -24,23 +25,24 @@ function authMiddleware(...allowedRoles) {
     try {
       const decoded = jwt.verify(tokenString, process.env.JWT_SECRET);
 
-      const userRole = decoded.role;
+      const userRoleName = decoded.role;
 
       let hasAccess = false;
-      if (allowedRoles.length === 0) {
+      if (allowedPermissions.length === 0) {
         hasAccess = true;
-      } else if (allowedRoles.includes(userRole)) {
-        hasAccess = true;
-      }
-      // If user is Admin they bypass all checks
-      if (userRole === "Admin") {
-        hasAccess = true;
+      } else if (userRoleName === "Admin") {
+        hasAccess = true; // Admin bypasses all checks
+      } else {
+        const role = await Role.findOne({ name: userRoleName }).lean();
+        if (role && role.permissions) {
+            hasAccess = allowedPermissions.some(p => role.permissions.includes(p));
+        }
       }
 
       if (!hasAccess) {
         return res
           .status(403)
-          .json({ error: "Access forbidden: insufficient role" });
+          .json({ error: "Access forbidden: insufficient role permissions" });
       }
 
       req.user = { user_id: decoded.user_id, role: decoded.role };

@@ -9,7 +9,7 @@ import { notifyUser } from '../controllers/userHandler.js';
 function setupTriggerRoutes(app) {
     // Alert routes (VIP-2, VIP-3)
     const alertRoutes = express.Router();
-    alertRoutes.use(authMiddleware('VIP-2', 'VIP-3'));
+    alertRoutes.use(authMiddleware('manage_alerts'));
     alertRoutes.post('/alerts', alertHandler.createAlert);
     alertRoutes.get('/alerts', alertHandler.getAlerts);
     alertRoutes.get('/alerts/:id', alertHandler.getAlert);
@@ -23,7 +23,7 @@ function setupTriggerRoutes(app) {
 
     // Indicator routes (VIP-3 only)
     const indicatorRoutes = express.Router();
-    indicatorRoutes.use(authMiddleware('VIP-3'));
+    indicatorRoutes.use(authMiddleware('manage_indicators'));
     indicatorRoutes.post('/', indicatorHandler.setAdvancedIndicatorAlert);
     indicatorRoutes.get('/', indicatorHandler.getIndicatorAlerts);
     indicatorRoutes.get('/:id', indicatorHandler.getIndicatorAlert);

@@ -1,4 +1,4 @@
-import { checkAndSendAlerts } from './snooze.js';
+import { checkAndSendAlerts } from './alertLogic.js';
 
 let intervalId = null;
 let isRunning = false;

@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import Indicator from '../models/Indicator.js';
+import Indicator from '../models/Alert.js';
 import User from '../../admin/models/User.js';
 import { verifyJWT } from '../../../middlewares/authMiddleware.js';
 import { normalizeBinanceSymbol } from './symbolAlert.js';

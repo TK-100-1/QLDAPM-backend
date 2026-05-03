@@ -553,17 +553,17 @@ function isInTimeWindow(alert) {
 
 async function checkAndSendAlerts() {
     try {
-        const alerts = await Alert.find();
+        const alerts = await Alert.find({ is_active: 'true' });
 
         for (const alertDoc of alerts) {
-            alertDoc.status = getAlertStatus(alertDoc);
-            console.log('Checking alert', {
-                id: alertDoc._id,
-                symbol: alertDoc.symbol,
-                triggerType: alertDoc.triggerType,
-                status: alertDoc.status,
-            });
-            if (alertDoc.is_active !== 'active') continue;
+            // alertDoc.status = getAlertStatus(alertDoc);
+            // console.log('Checking alert', {
+            //     id: alertDoc._id,
+            //     symbol: alertDoc.symbol,
+            //     triggerType: alertDoc.triggerType,
+            //     status: alertDoc.status,
+            // });
+            // if (alertDoc.is_active !== 'active') continue;
             const alert = alertDoc.toObject({ virtuals: true });
             if (!isInTimeWindow(alert)) continue;
             alert._id = alertDoc._id;

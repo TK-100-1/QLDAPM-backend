@@ -89,25 +89,31 @@ export async function sepayWebhook(req, res) {
         // return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const { id, gateway, transactionDate, accountNumber, subAccount, amountTransfer, transferType, transferContent, referenceNumber, body } = req.body;
+    console.log('\n--- SEPAY WEBHOOK PAYLOAD ---');
+    console.log(JSON.stringify(req.body, null, 2));
+    console.log('-----------------------------\n');
+
+    const { id, gateway, transactionDate, accountNumber, subAccount, amountTransfer, transferAmount, transferType, transferContent, content, referenceNumber, referenceCode, body } = req.body;
     
+    const actualAmount = transferAmount || amountTransfer || 0;
+    const actualContent = content || transferContent || "";
+
     // Validate we got an incoming transfer (IN)
     if (transferType !== 'in' && transferType !== '15') {
       return res.status(200).json({ success: true, message: 'Ignored non-incoming transfer' });
     }
 
     // Try to find the order ID in the transferContent
-    // transferContent usually looks like: "NGUYEN VAN A CHUYEN TIEN VIP A1B2C3"
-    // We search for our pending orders to match
+    // transferContent usually looks like: "NGUYEN VAN A CHUYEN TIEN VIP E396D7312A4A"
     
-    // We can extract potential orderIds (6 hex chars)
-    const matches = transferContent ? transferContent.match(/[a-fA-F0-9]{6}/g) : [];
+    // We can extract potential orderIds (12 hex chars because of crypto.randomBytes(6))
+    const matches = actualContent ? actualContent.match(/[a-fA-F0-9]{12}/g) : [];
     let foundOrder = null;
     
     if (matches && matches.length > 0) {
         for (const possibleId of matches) {
             const order = await Order.findOne({ order_id: possibleId.toUpperCase(), transaction_status: 'pending' });
-            if (order && amountTransfer >= order.amount) {
+            if (order && actualAmount >= order.amount) {
                 foundOrder = order;
                 break;
             }
@@ -118,8 +124,8 @@ export async function sepayWebhook(req, res) {
     if (!foundOrder) {
         const pendingOrders = await Order.find({ transaction_status: 'pending' });
         for (const order of pendingOrders) {
-            if (transferContent && transferContent.includes(order.orderId)) {
-                if (amountTransfer >= order.amount) {
+            if (actualContent && actualContent.toUpperCase().includes(order.order_id)) {
+                if (actualAmount >= order.amount) {
                     foundOrder = order;
                     break;
                 }

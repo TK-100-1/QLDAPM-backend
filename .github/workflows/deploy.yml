@@ -1,4 +1,4 @@
-name: Deploy VPS use docker images
+name: Deploy VPS 
 
 on:
   push:

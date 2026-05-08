@@ -35,3 +35,4 @@ jobs:
             cd /root/ubuntu/cprice
             docker compose pull  # Lấy image mới nhất về
             docker compose up -d # Restart các container có thay đổi
+            docker image prune -f

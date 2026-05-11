@@ -139,10 +139,11 @@ export async function sepayWebhook(req, res) {
         foundOrder.updated_at = new Date();
         await foundOrder.save();
 
-        // Update User Role
+        // Update User Role - Ensure correct format with hyphen (e.g., VIP-1 instead of VIP_1)
+        const formattedRole = foundOrder.vip_level.replace(/_/g, '-');
         await User.updateOne(
             { _id: foundOrder.user_id },
-            { $set: { role: foundOrder.vip_level } }
+            { $set: { role: formattedRole } }
         );
         
         console.log(`SePay Webhook processed successfully for order ${foundOrder.order_id}`);
@@ -187,7 +188,8 @@ export async function handleQueryPaymentStatus(req, res) {
         }
 
         if (order.transaction_status === 'success') {
-            const token = generateToken(userIDFromToken, order.vip_level);
+            const formattedRole = order.vip_level.replace(/_/g, '-');
+            const token = generateToken(userIDFromToken, formattedRole);
             return res.status(200).json({
                 message: 'Payment confirmed and VIP level upgraded',
                 status: '0',

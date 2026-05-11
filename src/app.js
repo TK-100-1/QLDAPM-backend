@@ -134,15 +134,6 @@ async function main() {
 
         setupAdminRoutes(app);
 
-        // Initialize MoMo payment
-        initMomo();
-
-        // Start alert checker automatically on server startup
-        startAlertChecker();
-        // stopRunning();
-
-        // await checkAndSendAlerts();
-
         // Start server
         const PORT = 8080;
         server.listen(PORT, () => {

@@ -21,7 +21,7 @@ import {
     stopRunning,
 } from './services/trigger/services/alertChecker.js';
 import { authMiddleware } from './middlewares/authMiddleware.js';
-import { checkAndSendAlerts } from './services/trigger/services/snooze.js';
+import { checkAndSendAlerts } from './services/trigger/services/alertLogic.js';
 
 import Role from './services/admin/models/Role.js';
 const app = express();

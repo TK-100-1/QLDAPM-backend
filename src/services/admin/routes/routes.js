@@ -34,25 +34,49 @@ function setupAdminRoutes(app) {
   authRoutes.post("/forgot-password", authController.forgotPassword);
   authRoutes.post("/reset-password", authController.resetPassword);
   authRoutes.post("/refresh-token", authController.refreshToken);
-  authRoutes.post(
-    "/logout",
-    authMiddleware(),
-    authController.logout,
-  );
+  authRoutes.post("/logout", authMiddleware(), authController.logout);
   app.use("/api/v1/auth", authRoutes);
 
   // Admin
   const adminRoutes = express.Router();
-  
+
   // User Management
-  adminRoutes.get("/users", authMiddleware("manage_users"), adminController.getAllUsers);
-  adminRoutes.post("/user", authMiddleware("manage_users"), adminController.createUserByAdmin);
-  adminRoutes.put("/user/:user_id/role", authMiddleware("manage_users"), adminController.changeUserRoleByAdmin);
-  adminRoutes.get("/user/:user_id", authMiddleware("manage_users"), adminController.getUserByAdmin);
-  adminRoutes.delete("/user/:user_id", authMiddleware("manage_users"), adminController.deleteUserByAdmin);
-  adminRoutes.put("/user/:user_id/ban", authMiddleware("manage_users"), adminController.banAccount);
-  adminRoutes.put("/user/:user_id/active", authMiddleware("manage_users"), adminController.activeAccount);
-  
+  adminRoutes.get(
+    "/users",
+    authMiddleware("manage_users"),
+    adminController.getAllUsers,
+  );
+  adminRoutes.post(
+    "/user",
+    authMiddleware("manage_users"),
+    adminController.createUserByAdmin,
+  );
+  adminRoutes.put(
+    "/user/:user_id/role",
+    authMiddleware("manage_users"),
+    adminController.changeUserRoleByAdmin,
+  );
+  adminRoutes.get(
+    "/user/:user_id",
+    authMiddleware("manage_users"),
+    adminController.getUserByAdmin,
+  );
+  adminRoutes.delete(
+    "/user/:user_id",
+    authMiddleware("manage_users"),
+    adminController.deleteUserByAdmin,
+  );
+  adminRoutes.put(
+    "/user/:user_id/ban",
+    authMiddleware("manage_users"),
+    adminController.banAccount,
+  );
+  adminRoutes.put(
+    "/user/:user_id/active",
+    authMiddleware("manage_users"),
+    adminController.activeAccount,
+  );
+
   // Payment History
   adminRoutes.get(
     "/payment-history",
@@ -64,12 +88,28 @@ function setupAdminRoutes(app) {
     authMiddleware("view_payment_history"),
     adminController.getPaymentHistoryOfAUserByAdmin,
   );
-  
+
   // Roles Management
-  adminRoutes.get("/roles", authMiddleware("manage_roles"), roleController.getRoles);
-  adminRoutes.post("/roles", authMiddleware("manage_roles"), roleController.createRole);
-  adminRoutes.put("/roles/:id", authMiddleware("manage_roles"), roleController.updateRole);
-  adminRoutes.delete("/roles/:id", authMiddleware("manage_roles"), roleController.deleteRole);
+  adminRoutes.get(
+    "/roles",
+    authMiddleware("manage_roles"),
+    roleController.getRoles,
+  );
+  adminRoutes.post(
+    "/roles",
+    authMiddleware("manage_roles"),
+    roleController.createRole,
+  );
+  adminRoutes.put(
+    "/roles/:id",
+    authMiddleware("manage_roles"),
+    roleController.updateRole,
+  );
+  adminRoutes.delete(
+    "/roles/:id",
+    authMiddleware("manage_roles"),
+    roleController.deleteRole,
+  );
 
   app.use("/api/v1/admin", adminRoutes);
 

@@ -2,6 +2,24 @@ import mongoose from 'mongoose';
 import Alert from '../models/Alert.js';
 import User from '../../admin/models/User.js';
 import { verifyJWT } from '../../../middlewares/authMiddleware.js';
+import { getAlertStatus } from '../services/alertLogic.js';
+
+function normalizeAlert(body) {
+    return {
+        ...body,
+
+        execution: {
+            cooldown_seconds: body.cooldownSeconds || 30,
+            max_triggers: body.maxTriggers || 10,
+            min_confirmations: body.minConfirmations || 1,
+            dedupe_window_seconds: body.dedupeWindowSeconds || 30,
+        },
+
+        conditionTree: body.conditionTree,
+
+        conditions: body.conditions || [],
+    };
+}
 
 async function createAlert(req, res) {
     try {
@@ -41,11 +59,31 @@ async function createAlert(req, res) {
                 .json({ error: 'Maximum alert limit reached' });
         }
 
+        // const normalizedPayload = normalizeAlertPayload(req.body || {});
+        const payloads = Array.isArray(req.body) ? req.body : [req.body];
+        const body = payloads[0] || {};
+        console.log(' payload:', body);
+        console.log('RAW:', JSON.stringify(req.body, null, 2));
+        console.log('BODY:', JSON.stringify(body, null, 2));
+
+        // Handle optional timeWindow with safe property access
+        if (body.timeWindow) {
+            body.timeWindow.start = body.timeWindow?.start
+                ? new Date(body.timeWindow.start)
+                : null;
+            body.timeWindow.end = body.timeWindow?.end
+                ? new Date(body.timeWindow.end)
+                : null;
+        }
+
+        console.log('CreateAlert payload:', body);
+
+        const normalized = normalizeAlert(body);
+
         const newAlert = new Alert({
-            ...req.body,
+            ...normalized,
             user_id: currentUserID,
             is_active: true,
-            max_repeat_count: req.body.max_repeat_count || 5,
             repeat_count: 0,
         });
 
@@ -73,6 +111,47 @@ async function createAlert(req, res) {
     }
 }
 
+// async function getAlerts(req, res) {
+//     try {
+//         const tokenString = req.headers.authorization;
+//         if (!tokenString) {
+//             return res
+//                 .status(401)
+//                 .json({ error: 'Authorization header required' });
+//         }
+
+//         let claims;
+//         try {
+//             claims = verifyJWT(tokenString);
+//         } catch (e) {
+//             console.error('JWT verification error:', e);
+//             return res.status(401).json({ error: 'Invalid token' });
+//         }
+
+//         const currentUserID = claims.userID;
+//         if (!currentUserID) {
+//             return res
+//                 .status(401)
+//                 .json({ error: 'User ID not found in token' });
+//         }
+
+//         const filter = { user_id: currentUserID };
+//         const alertType = req.query.type;
+//         if (alertType) {
+//             filter.type = alertType;
+//         }
+
+//         const results = await Alert.find(filter);
+//         res.status(200).json(results);
+//     } catch (err) {
+//         console.error('GetAlerts error:', err);
+//         res.status(500).json({
+//             error: 'Failed to retrieve alerts',
+//             details: err.message,
+//         });
+//     }
+// }
+
 async function getAlerts(req, res) {
     try {
         const tokenString = req.headers.authorization;
@@ -86,6 +165,7 @@ async function getAlerts(req, res) {
         try {
             claims = verifyJWT(tokenString);
         } catch (e) {
+            console.error('JWT verification error:', e);
             return res.status(401).json({ error: 'Invalid token' });
         }
 
@@ -103,10 +183,27 @@ async function getAlerts(req, res) {
         }
 
         const results = await Alert.find(filter);
-        res.status(200).json(results);
+
+        //  inject status
+        const enrichedResults = results.map((alertDoc) => {
+            const alert = alertDoc.toObject({ virtuals: true });
+
+            const status = getAlertStatus(alert);
+            console.log(`Alert ID: ${alert._id}, Status: ${status}`); // Debug log
+
+            return {
+                ...alert,
+                status,
+            };
+        });
+
+        res.status(200).json(enrichedResults);
     } catch (err) {
         console.error('GetAlerts error:', err);
-        res.status(500).json({ error: 'Failed to retrieve alerts' });
+        res.status(500).json({
+            error: 'Failed to retrieve alerts',
+            details: err.message,
+        });
     }
 }
 
@@ -138,12 +235,25 @@ async function getAlert(req, res) {
             return res.status(400).json({ error: 'Invalid alert ID' });
         }
 
-        const alert = await Alert.findOne({ _id: id, user_id: currentUserID });
-        if (!alert) {
+        const alertDoc = await Alert.findOne({
+            _id: id,
+            user_id: currentUserID,
+        });
+
+        if (!alertDoc) {
             return res.status(404).json({ error: 'Alert not found' });
         }
 
-        res.status(200).json(alert);
+        const alert = alertDoc.toObject({ virtuals: true });
+
+        //  inject status
+        const { status, reason } = getAlertStatus(alert);
+
+        res.status(200).json({
+            ...alert,
+            status,
+            status_reason: reason,
+        });
     } catch (err) {
         console.error('GetAlert error:', err);
         res.status(500).json({ error: 'Failed to retrieve alert' });
@@ -234,6 +344,8 @@ async function updateAlert(req, res) {
         }
 
         // Update alert with new data
+        // const normalizedPayload = normalizeAlertPayload(req.body || {});
+
         const updateData = {
             ...req.body,
             updated_at: new Date(),

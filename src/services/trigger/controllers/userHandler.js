@@ -24,33 +24,67 @@ async function notifyUserTriggers(userID, triggeredAlerts = null) {
 
     if (!alerts.length) return;
 
-    // ✅ chỉ lấy alert gửi email
-    const emailAlerts = alerts.filter((a) => a.notification_method === 'email');
+    // chỉ lấy alert gửi email
+    const emailAlerts = alerts.filter((a) => {
+        const method =
+            a.notification?.method || a.notification_method || 'email';
+        return method === 'email';
+    });
 
     if (!emailAlerts.length) return;
 
-    const subject = '🚨 Your Trigger Alerts';
+    const subject = '🚨 Crypto Alert Triggered';
 
-    let htmlBody = `<h2>🚨 Trigger Alerts</h2><ul>`;
+    let htmlBody = `
+        <div style="font-family: Arial, sans-serif; background:#f4f6f8; padding:20px;">
+            <h2 style="color:#d32f2f;">🚨 Alert Notification</h2>
+    `;
 
     for (const alert of emailAlerts) {
-        const triggerType = alert.type || alert.trigger_type || 'unknown';
-        const conditionText = alert.condition
-            ? `${alert.condition} ${alert.threshold}`
-            : '';
+        const message =
+            alert.message ||
+            alert.notification?.message ||
+            'No message available';
 
-        const message = alert.message || 'No message available';
+        // convert xuống dòng cho HTML
+        const formattedMessage = message.replace(/\n/g, '<br/>');
 
         htmlBody += `
-            <li>
-                <b>${alert.symbol}</b> (${triggerType})<br/>
-                ${message}<br/>
-                ${conditionText ? `Condition: ${conditionText}` : ''}
-            </li>
+            <div style="
+                background:white;
+                border-radius:10px;
+                padding:15px;
+                margin-bottom:15px;
+                box-shadow:0 2px 6px rgba(0,0,0,0.1);
+            ">
+                <div style="font-size:18px; font-weight:bold; margin-bottom:8px;">
+                    📊 ${alert.symbol}
+                </div>
+
+                <div style="
+                    font-size:14px;
+                    color:#333;
+                    line-height:1.6;
+                    margin-bottom:10px;
+                ">
+                    ${formattedMessage}
+                </div>
+
+                <div style="font-size:12px; color:#888;">
+                    Trigger count: ${alert.runtime_state?.trigger_count || 0} |
+                    Time: ${new Date().toLocaleString()}
+                </div>
+            </div>
         `;
     }
 
-    htmlBody += '</ul>';
+    htmlBody += `
+            <hr style="margin-top:20px;"/>
+            <div style="font-size:12px; color:#999;">
+                This is an automated message from your alert system.
+            </div>
+        </div>
+    `;
 
     try {
         await sendAlertEmail(user.email, subject, htmlBody);

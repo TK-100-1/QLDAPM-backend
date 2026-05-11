@@ -4,6 +4,11 @@ import Role from "../services/admin/models/Role.js";
 // Token blacklist: Map<tokenString, expiresAt Date>
 const blacklistedTokens = new Map();
 
+function normalizeRole(role) {
+  if (!role) return role;
+  return String(role).replace(/_/g, "-");
+}
+
 function authMiddleware(...allowedPermissions) {
   return async (req, res, next) => {
     const tokenString = req.headers.authorization;
@@ -35,7 +40,9 @@ function authMiddleware(...allowedPermissions) {
       } else {
         const role = await Role.findOne({ name: userRoleName }).lean();
         if (role && role.permissions) {
-            hasAccess = allowedPermissions.some(p => role.permissions.includes(p));
+          hasAccess = allowedPermissions.some((p) =>
+            role.permissions.includes(p),
+          );
         }
       }
 
@@ -45,7 +52,7 @@ function authMiddleware(...allowedPermissions) {
           .json({ error: "Access forbidden: insufficient role permissions" });
       }
 
-      req.user = { user_id: decoded.user_id, role: decoded.role };
+      req.user = { user_id: decoded.user_id, role: userRole };
       next();
     } catch (err) {
       return res.status(401).json({ error: "Invalid token" });
@@ -60,7 +67,7 @@ function verifyJWT(tokenString) {
     const decoded = jwt.verify(tokenString, jwtKey);
     return {
       userID: decoded.user_id,
-      role: decoded.role,
+      role: normalizeRole(decoded.role),
       expiresAt: new Date(decoded.exp * 1000),
     };
   } catch (err) {
@@ -83,7 +90,7 @@ function generateToken(userID, role) {
 
   const payload = {
     user_id: userID,
-    role: role,
+    role: normalizeRole(role),
   };
 
   return jwt.sign(payload, tokenSecret, { expiresIn: ttlSeconds });

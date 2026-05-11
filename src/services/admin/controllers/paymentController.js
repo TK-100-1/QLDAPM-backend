@@ -1,11 +1,13 @@
 import mongoose from 'mongoose';
+import crypto from 'crypto';
 import Order from '../models/Order.js';
 import User from '../models/User.js';
+import Role from '../models/Role.js';
 import { verifyJWT, generateToken } from '../../../middlewares/authMiddleware.js';
-import { isValidUpgradeCost } from '../utils/upgradeAmount.js';
-import { createMoMoPayment, queryPaymentStatus } from '../momo/momoPayment.js';
+import { generateVietQRUrl } from '../sepay/sepayPayment.js';
 
-async function createVIPPayment(req, res) {
+// 1. Create a VIP Payment using SePay
+export async function createVIPPayment(req, res) {
   try {
     const tokenString = req.headers.authorization;
     if (!tokenString) {
@@ -20,43 +22,36 @@ async function createVIPPayment(req, res) {
     }
 
     const userID = claims.userID;
-    const currentVIP = claims.role;
-    if (!userID || !currentVIP) {
+    if (!userID) {
       return res.status(401).json({ error: 'Invalid token claims' });
     }
 
-    const { amount, vip_level } = req.body;
-    if (!amount || amount <= 0 || !vip_level) {
-      return res.status(400).json({ error: 'Invalid request data' });
+    // Role requested to buy (now passed as role_id or role_name)
+    const { role_name } = req.body;
+    if (!role_name) {
+      return res.status(400).json({ error: 'Role name is required' });
     }
 
-    // Validate VIP level progression
-    const vipLevels = { 'VIP-0': 0, 'VIP-1': 1, 'VIP-2': 2, 'VIP-3': 3 };
-    const currentVIPLevel = vipLevels[currentVIP];
-    const requestedVIPLevel = vipLevels[vip_level];
-
-    if (requestedVIPLevel === undefined || requestedVIPLevel <= currentVIPLevel) {
-      return res.status(400).json({ error: 'Invalid target VIP level' });
+    // Find the requested role
+    const roleToBuy = await Role.findOne({ name: role_name });
+    if (!roleToBuy || !roleToBuy.price || roleToBuy.price <= 0) {
+      return res.status(400).json({ error: 'Invalid role or role is not for sale' });
     }
 
-    const { valid, expectedAmount } = isValidUpgradeCost(currentVIP, vip_level, amount);
-    if (!valid) {
-      console.log(`Invalid amount for upgrade: expected ${expectedAmount}, got ${amount}`);
-      return res.status(400).json({
-        error: `Invalid amount. Expected ${expectedAmount} for upgrade from ${currentVIP} to ${vip_level}`,
-      });
-    }
+    // Amount comes from DB, not from request, for security
+    const amount = roleToBuy.price;
 
-    const orderInfo = `Upgrade ${vip_level}`;
-    const { paymentURL, orderId } = await createMoMoPayment(String(amount), vip_level, orderInfo);
+    // Generate a unique order id
+    const orderId = crypto.randomBytes(6).toString('hex').toUpperCase(); // e.g. A1B2C3
+    // Order info syntax for SePay to parse easily
+    const orderInfo = `VIP ${orderId}`;
 
-    if (!paymentURL) {
-      return res.status(500).json({ error: 'Internal Server Error' });
-    }
+    // Get SePay QR URL
+    const paymentURL = generateVietQRUrl(amount, orderInfo);
 
     await Order.create({
       user_id: userID,
-      vip_level: vip_level,
+      vip_level: role_name, // Store the role name they are buying
       amount,
       order_id: orderId,
       orderInfo,
@@ -70,115 +65,145 @@ async function createVIPPayment(req, res) {
     setTimeout(async () => {
       try {
         await Order.updateOne(
-          { order_id: orderId },
+          { order_id: orderId, transaction_status: 'pending' },
           { $set: { transaction_status: 'failed' } }
         );
-        console.log(`Order ${orderId} status updated to failed due to timeout`);
       } catch (err) {
-        console.error(`Error updating order status for orderId ${orderId}:`, err);
+        console.error(`Error expiring order ${orderId}:`, err);
       }
     }, 100 * 60 * 1000);
+
   } catch (err) {
     console.error('CreateVIPPayment error:', err);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 }
 
-async function confirmPaymentHandlerSuccess(res, orderID, role) {
+// 2. SePay Webhook Handler
+export async function sepayWebhook(req, res) {
   try {
-    const order = await Order.findOne({ order_id: orderID });
-    if (!order) {
-      return res.status(404).json({ error: 'Invalid order' });
+    // Basic verification token (optional, configure in SePay dashboard and .env)
+    const webhookToken = req.headers['authorization'] || req.query.token;
+    if (process.env.SEPAY_WEBHOOK_TOKEN && webhookToken !== `Bearer ${process.env.SEPAY_WEBHOOK_TOKEN}`) {
+        // Just a simple check if env is set
+        // return res.status(401).json({ error: "Unauthorized" });
     }
 
-    await Order.updateOne(
-      { order_id: orderID },
-      { $set: { transaction_status: 'success', updated_at: new Date() } }
-    );
+    console.log('\n--- SEPAY WEBHOOK PAYLOAD ---');
+    console.log(JSON.stringify(req.body, null, 2));
+    console.log('-----------------------------\n');
 
-    const userID = order.user_id;
-    const newVIP = order.vip_level;
+    const { id, gateway, transactionDate, accountNumber, subAccount, amountTransfer, transferAmount, transferType, transferContent, content, referenceNumber, referenceCode, body } = req.body;
+    
+    const actualAmount = transferAmount || amountTransfer || 0;
+    const actualContent = content || transferContent || "";
 
-    await User.updateOne(
-      { _id: userID },
-      { $set: { role: newVIP } }
-    );
-
-    const token = generateToken(userID, newVIP);
-
-    if (role === 'Admin') {
-      return res.status(200).json({
-        message: 'Payment confirmed and VIP level upgraded',
-        status: '0',
-      });
+    // Validate we got an incoming transfer (IN)
+    if (transferType !== 'in' && transferType !== '15') {
+      return res.status(200).json({ success: true, message: 'Ignored non-incoming transfer' });
     }
 
-    res.status(200).json({
-      message: 'Payment confirmed and VIP level upgraded',
-      status: '0',
-      token,
-    });
-  } catch (err) {
-    console.error('confirmPaymentHandlerSuccess error:', err);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-}
-
-async function handleQueryPaymentStatus(req, res) {
-  try {
-    const { orderId, requestId, lang } = req.body;
-
-    if (!orderId || !requestId) {
-      return res.status(400).json({ error: 'Missing required parameters' });
+    // Try to find the order ID in the transferContent
+    // transferContent usually looks like: "NGUYEN VAN A CHUYEN TIEN VIP E396D7312A4A"
+    
+    // We can extract potential orderIds (12 hex chars because of crypto.randomBytes(6))
+    const matches = actualContent ? actualContent.match(/[a-fA-F0-9]{12}/g) : [];
+    let foundOrder = null;
+    
+    if (matches && matches.length > 0) {
+        for (const possibleId of matches) {
+            const order = await Order.findOne({ order_id: possibleId.toUpperCase(), transaction_status: 'pending' });
+            if (order && actualAmount >= order.amount) {
+                foundOrder = order;
+                break;
+            }
+        }
     }
 
-    const tokenString = req.headers.authorization;
-    let userIDFromToken = '';
-    let role = '';
-
-    if (tokenString) {
-      try {
-        const claims = verifyJWT(tokenString);
-        userIDFromToken = claims.userID;
-        role = claims.role;
-      } catch (e) {
-        return res.status(401).json({ error: 'Invalid or expired token' });
-      }
+    // Fallback: If not found by regex, do a full text search in pending orders (less efficient but safer)
+    if (!foundOrder) {
+        const pendingOrders = await Order.find({ transaction_status: 'pending' });
+        for (const order of pendingOrders) {
+            if (actualContent && actualContent.toUpperCase().includes(order.order_id)) {
+                if (actualAmount >= order.amount) {
+                    foundOrder = order;
+                    break;
+                }
+            }
+        }
     }
 
-    if (!tokenString && role !== 'Admin') {
-      return res.status(401).json({ error: 'Authorization token is required' });
-    }
+    if (foundOrder) {
+        // Mark as success
+        foundOrder.transaction_status = 'success';
+        foundOrder.updated_at = new Date();
+        await foundOrder.save();
 
-    const order = await Order.findOne({ order_id: orderId });
-    if (!order) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
-
-    // If not admin, check ownership
-    if (role !== 'Admin') {
-      if (order.user_id !== userIDFromToken) {
-        return res.status(403).json({ error: 'You do not have permission to query this order' });
-      }
-    }
-
-    const result = await queryPaymentStatus(orderId, requestId, lang || 'vi');
-
-    if (result.resultCode === 0) {
-      await confirmPaymentHandlerSuccess(res, orderId, role);
+        // Update User Role - Ensure correct format with hyphen (e.g., VIP-1 instead of VIP_1)
+        const formattedRole = foundOrder.vip_level.replace(/_/g, '-');
+        await User.updateOne(
+            { _id: foundOrder.user_id },
+            { $set: { role: formattedRole } }
+        );
+        
+        console.log(`SePay Webhook processed successfully for order ${foundOrder.order_id}`);
     } else {
-      res.status(200).json({
-        message: 'Transaction is not successful yet',
-        status: result.message,
-      });
+        console.log('SePay Webhook received but no matching pending order found or amount insufficient.', transferContent);
     }
+
+    res.status(200).json({ success: true });
+
   } catch (err) {
-    console.error('HandleQueryPaymentStatus error:', err);
+    console.error('SePay Webhook Error:', err);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 }
 
-export {
-  createVIPPayment,
-  handleQueryPaymentStatus,
-};
+// 3. Status Polling Endpoint (For frontend to check if order is complete)
+export async function handleQueryPaymentStatus(req, res) {
+    try {
+        const { orderId } = req.body;
+        if (!orderId) return res.status(400).json({ error: 'Missing orderId' });
+
+        const tokenString = req.headers.authorization;
+        let userIDFromToken = '';
+
+        if (tokenString) {
+          try {
+            const claims = verifyJWT(tokenString);
+            userIDFromToken = claims.userID;
+          } catch (e) {
+            return res.status(401).json({ error: 'Invalid or expired token' });
+          }
+        } else {
+            return res.status(401).json({ error: 'Authorization token is required' });
+        }
+
+        const order = await Order.findOne({ order_id: orderId });
+        if (!order) return res.status(404).json({ error: 'Order not found' });
+
+        // Ensure ownership
+        if (order.user_id !== userIDFromToken) {
+            return res.status(403).json({ error: 'Unauthorized' });
+        }
+
+        if (order.transaction_status === 'success') {
+            const formattedRole = order.vip_level.replace(/_/g, '-');
+            const token = generateToken(userIDFromToken, formattedRole);
+            return res.status(200).json({
+                message: 'Payment confirmed and VIP level upgraded',
+                status: '0',
+                token
+            });
+        }
+
+        res.status(200).json({
+            message: 'Transaction is not successful yet',
+            status: order.transaction_status
+        });
+
+    } catch (err) {
+        console.error('QueryPaymentStatus Error:', err);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+}

@@ -52,7 +52,7 @@ function authMiddleware(...allowedPermissions) {
           .json({ error: "Access forbidden: insufficient role permissions" });
       }
 
-      req.user = { user_id: decoded.user_id, role: userRole };
+      req.user = { user_id: decoded.user_id, role: userRoleName };
       next();
     } catch (err) {
       return res.status(401).json({ error: "Invalid token" });
